@@ -1,0 +1,190 @@
+Welcome to Red, White, and Blue
+
+(c) 2012, 2019 Peter A. Dinda, pdinda@northwestern.edu
+
+This is a tiny geolocation-oriented application that integrates
+political contribution and opinion data onto a map view.   
+
+It is based on Perl CGI, DBI, an Oracle Database, and client-side
+JavaScript with Google Maps.  It is instructional code to support EECS
+339, Introduction to Databases in the EECS department at Northwestern
+University.
+
+Requirements
+------------
+
+Students in EECS 339 at Northwestern can ignore this "Requirements"
+section since your lab install already meets these requirements and
+you already have all the needed accounts.
+
+You must have the following software running:
+
+   Perl 5.8 or later (generally tested with 5.10)
+     CGI
+     DBI
+     DBI::Oracle
+     Time::ParseDate
+   Oracle    (tested with Oracle 11g)
+   Apache    (or other web server)
+   Web Browser (tested with Google Chrome)
+
+We assume the following:
+   
+   machine     Name of your machine
+   you         Linux username
+   yourgroup   Your Linux group
+   youora      Your Oracle username
+   orapasswd   Your Oracle password
+
+Your oracle account must have permissions to allow the creation of
+tables and sequences, inserts, deletes, updates, and selects.  Here 
+is a minimal set of sysdba commands to do this if it isn't already the
+case.  These are not commands that can be executed by the 
+student, but rather by the database administrator:
+
+$ sqlplus /nolog
+SQL> connect / as sysdba;
+SQL> create user youora identified by orapasswd default tablespace users;
+SQL> grant connect, resource to youora;
+SQL> quit;
+
+In addition to the tables that you (the student) will create, RWB also
+needs to have access to the FEC data tables, which we assume are
+installed in a class account, "cs339" at Northwestern.  Students must
+have read access to these tables.  Again, this is set by the database
+administrator.
+
+We assume that ~you/www is served by Apache as http://machine/~you.
+We also assume that ~you/www and its children are CGI-enabled and
+support CGI scripts with the extension ".pl".   It is helpful if 
+you are using suexec - otherwise realize that CGI programs execute as
+the web server user, not as you.   We use suexec at Northwestern.
+
+Your web browser must support JavaScript and accept cookies.  We
+highly recommend using Google Chrome.  Not only is RWB tested using it,
+Chrome's development tools are very useful in understanding what's 
+going on.
+
+
+Contents
+--------
+
+   README         This file
+   rwb.sql        SQL code for creating the schema (but not the FEC tables)
+   rwb.pl         Perl CGI code that implements the application on the server
+   rwb.js         JavaScript, which is run by the client 
+   rwb.css        Style file that describes how to skin pages
+   rwb-drop.sql   How to delete RWB from the database
+
+
+Installing RWB
+--------------
+
+cd www
+tar xvfz rwb.tgz
+cd rwb
+sqlplus youora/orapasswd @rwb.sql
+
+Now edit rwb.pl to reflect your environment.  
+
+These lines reflect where oracle is installed:
+
+    $ENV{ORACLE_BASE}="/raid/oracle11g/app/oracle/product/11.2.0.1.0";
+    $ENV{ORACLE_HOME}=$ENV{ORACLE_BASE}."/db_1";
+    $ENV{ORACLE_SID}="CS339";
+    $ENV{LD_LIBRARY_PATH}=$ENV{ORACLE_HOME}."/lib";
+
+Northwestern students should not need to change these.
+
+These lines reflect your oracle user and password:
+
+my $dbuser="CHANGEME";
+my $dbpasswd="CHANGEME";
+
+This line reflects your key for Google Maps.
+
+my $googlemapskey="CHANGEME";
+
+At Northwestern, the main things you'll need to change are these 
+three lines.
+
+Using RWB
+---------
+
+Point a web browser at
+
+http://machine/~you/rwb/rwb.pl
+
+You will see a red, white, or blue banner that reflects current status, 
+and a map that is centered at your location.  The map has overlayed 
+upon it nearby political committees and candidates.   You can scroll
+and zoom the map as desired, and the map will continuously track your
+current location.  More options are available after the map.
+
+A clipping rectangle may appear if you zoom out too far.  This
+reflects the region over which the query is made.
+
+Understanding RWB
+-----------------
+
+No matter what the assignment is, you first want to understand how
+RWB works.  rwb.sql, rwb.pl, and rwb.js are extensively commented
+to help you do so.   The application can also generate tons of 
+debugging output.   If you include ?debug=1 at the end of the URL, 
+you will see this output in your browser.  You can also change the
+default in the rwb.pl script:
+
+my $debug=1;  # 1= output debugging data, 0= do not
+
+When you load http://machine/~you/rwb/rwb.pl, your browser sends the
+request, plus any cookies RWB has previously set to the server.  The
+server invokes rwb.pl and feeds it with the cookies and parameters.
+Based on this input, rwb.pl produces a page that is handed back to
+your browser.  The page contains references back to rwb.js, and your
+browser will also fetch this, and execute it.  rwb.js finds your
+current location, and creates a Google Map object on the page,
+centered at your location.  It also makes an additional call back to
+rwb.pl, this time asking it for political data that is nearby.  Based
+on this request, rwb.pl invokes a series of SQL queries to find the
+data, and then hands it back to rwb.js, which places this data on a
+hidden part of the web page.  It then parses the data and overlays it
+on the map.  rwb.js also installs callbacks that are invoked whenever
+the geoposition, map zoom, or map center changes.  When this occurs
+new data is fetched using rwb.pl and the map is redrawn. 
+
+In addition to the map interface, the user can also click on various
+links (the ones that appear depend on who he is).  These links invoke
+rwb.pl to produce different web pages containing forms to allow the
+input of data.  The most basic form is the login form, which allows a
+user to authenticate with a password.  When the user does this, rwb.pl
+also hands back a cookie that contains his credentials.  When further
+invocations of rwb.pl happen, this cookie is passed back, allowing for
+a persistent session.  An additional cookie, the debug cookie, is used
+to turn on (or off) debugging for all invocations of rwb.pl that are
+needed to build or update a page.
+
+NOTE: Passing a cookie with an unencrypted username/password
+combination is NOT a secure way of handling sessions.  First, it is
+sent in cleartext and so could be intercepted.  Second, it is stored
+in the browser or the browser cookie file in cleartext and so could be
+vulnerable to attack there.   
+
+
+Extending RWB
+-------------
+
+The first project in CS 339 involves extending RWB in various
+ways.  The best way to do this is generally the following:
+
+0. UNDERSTAND HOW IT WORKS FIRST
+1. Write the SQL needed for the task
+2. Verify that instances of the SQL work using sqlplus
+3. Embed the SQL into a Perl function (look at UserAdd or Committees 
+   as examples)
+4. Write the Perl logic to call the function at the
+   right time.
+5. Finally, write the corresponding JavaScript logic, if any.
+
+
+
+
